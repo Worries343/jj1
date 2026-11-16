@@ -235,6 +235,11 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){#bgmBtn.play,.ihint.on{animation:none}}
 
+
+  /* ---------- 主页固定成一屏：不管手机屏幕多高（微信里会被上下栏占掉一截），都完整放进一屏，不能上下滑动 ---------- */
+  html.lock,html.lock body{overflow:hidden;height:100%;overscroll-behavior:none}
+  #home{height:var(--vh,100vh);min-height:0;overflow:hidden;padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))}
+  #home .home-in{min-height:0;height:100%;transform-origin:50% 50%}
 </style>
 </head>
 <body>
@@ -355,9 +360,10 @@
   bgm.addEventListener('play',bgmUI); bgm.addEventListener('pause',bgmUI);
   const tryPlay=()=>{const p=bgm.play(); if(p) p.catch(()=>{});};
   function startBgm(e){ if(e&&e.target&&e.target.closest&&e.target.closest('#bgmBtn')) return; if(!bgmMuted&&bgm.paused) tryPlay(); }
-  ['touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,startBgm,true));
+  ['pointerdown','mousedown','touchstart','touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,startBgm,true));   // 手指一碰到屏幕就尽早开始
   bgmBtn.addEventListener('click',e=>{e.stopPropagation(); if(bgm.paused){bgmMuted=false;tryPlay();}else{bgmMuted=true;bgm.pause();}});
   document.addEventListener('WeixinJSBridgeReady',()=>{ if(!bgmMuted) tryPlay(); });
+  if(window.WeixinJSBridge&&window.WeixinJSBridge.invoke) window.WeixinJSBridge.invoke('getNetworkType',{},()=>{ if(!bgmMuted) tryPlay(); });   // 微信里：页面一打开就播放
   { const p=bgm.play(); if(p) p.then(bgmUI).catch(bgmUI); }
 
   // ---------- 换页 ----------
@@ -365,6 +371,7 @@
   function show(id){
     document.querySelectorAll('section').forEach(s=>{s.classList.toggle('on',s.id===id); s.classList.remove('leave');});
     window.scrollTo(0,0);
+    document.documentElement.classList.toggle('lock',id==='home'); if(id==='home') fitHome();   // 主页固定在一屏内、不能滑动
     if(location.hash!=='#'+id) history.replaceState(null,'',id==='home'?location.pathname+location.search:'#'+id);
   }
   function go(id,instant){
@@ -820,6 +827,22 @@
     }
     requestAnimationFrame(frame);
   })();
+
+  // ---------- 主页自适应：按手机实际可见的高度，把整块内容缩放到正好放得下 ----------
+  function fitHome(){
+    const home=document.getElementById('home'), box=home&&home.querySelector('.home-in'); if(!box) return;
+    document.documentElement.style.setProperty('--vh',innerHeight+'px');
+    box.style.transform='';
+    const kids=[...box.children].filter(c=>getComputedStyle(c).position!=='absolute'); if(!kids.length) return;
+    let top=Infinity,bot=-Infinity; kids.forEach(c=>{ const r=c.getBoundingClientRect(); top=Math.min(top,r.top); bot=Math.max(bot,r.bottom); });
+    const en=box.querySelector('.entxt'); const extra=en?en.offsetHeight+12:0;      // 卡片上方的英文小字也要放得下
+    const need=bot-top+extra, have=box.clientHeight;
+    const k=need>have?have/need:1;
+    box.style.transform=k<1?`translateY(${(extra/2*k).toFixed(1)}px) scale(${k.toFixed(4)})`:(extra?`translateY(${(extra/2).toFixed(1)}px)`:'');
+  }
+  addEventListener('resize',()=>{ if(document.getElementById('home').classList.contains('on')) fitHome(); });
+  document.addEventListener('touchmove',e=>{ if(document.documentElement.classList.contains('lock')) e.preventDefault(); },{passive:false});
+  document.documentElement.classList.add('lock'); fitHome(); setTimeout(fitHome,300); if(document.fonts) document.fonts.ready.then(fitHome);
 
   // 直接打开某个内页链接时跳过开场
   const h0=location.hash.slice(1);
