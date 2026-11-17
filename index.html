@@ -571,13 +571,16 @@
     requestAnimationFrame(fly);
   }
   requestAnimationFrame(fly);
-  setTimeout(()=>lines[0].classList.add('on'),2600);
-  setTimeout(()=>lines[1].classList.add('on'),3700);
-  setTimeout(()=>ihint.classList.add('on'),5000);
+  const introTimers=[ setTimeout(()=>lines[0].classList.add('on'),2600),
+                      setTimeout(()=>lines[1].classList.add('on'),3700),
+                      setTimeout(()=>ihint.classList.add('on'),5000) ];
 
   let shattered=false;
   intro.addEventListener('click',()=>{
     if(shattered || performance.now()-t0<1200) return; shattered=true;
+    // 字还没放完就点了：后面还没出来的字不再出来；正在浮现的字直接淡掉，不留在主页上（已经完全显示的字照旧被火烧掉）
+    introTimers.forEach(clearTimeout);
+    [...lines,ihint].filter(el=>+getComputedStyle(el).opacity<.95).forEach(el=>{ el.style.transition='opacity .35s ease,filter .35s ease'; el.style.animation='none'; el.style.opacity='0'; el.style.filter='blur(6px)'; });
     burn();
   });
 
@@ -1038,7 +1041,9 @@
       busy=true; clear();
       box.querySelectorAll('span').forEach(el=>el.classList.remove('on'));                                 // 渐隐
       timers.push(setTimeout(()=>{ show((cur+1)%PASS.length); busy=false; },1050)); });
-    new MutationObserver(()=>{ clear(); busy=false; cur=-1; num.textContent='00'; box.innerHTML=''; }).observe(sec,{attributes:true,attributeFilter:['class']});   // 每次进来先空着，等点击
+    let wasOn=sec.classList.contains('on');
+    new MutationObserver(()=>{ const on=sec.classList.contains('on'); if(on===wasOn) return; wasOn=on;   // 只在进出这一页时清空（入场动画加减 class 时不管）
+      clear(); busy=false; cur=-1; num.textContent='00'; box.innerHTML=''; }).observe(sec,{attributes:true,attributeFilter:['class']});   // 每次进来先空着，等点击
   })();
 
   // ---------- 主页自适应：按手机实际可见的高度，把整块内容缩放到正好放得下 ----------
